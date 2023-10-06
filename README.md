@@ -11,8 +11,8 @@ written in C++/CUDA. The main features of this implementation is the support for
 * universal kernel function (UKF)
 
 This prototype produced a paper that was published in the ICONIP 2012 Neural Information Processing conference.
-You can find it either in the folder paper or at 
-[Springer](https://link.springer.com/chapter/10.1007/978-3-642-34481-7_75)
+You can find it either in the 'paper' folder or at 
+[Springer](https://link.springer.com/chapter/10.1007/978-3-642-34481-7_75).
 
 You can find its abstract below:
 
