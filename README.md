@@ -1,8 +1,8 @@
 # Introduction
 
-MT-SVM-SMO is a prototype of a Support Vector Machine that served as a playground for a later GPGPU implementation 
-written in C++/CUDA. The main features of this implementation is the support for multi-threaded training/classification 
- and the support for five types of kernel functions:
+MT-SVM-SMO is a prototype of a Support Vector Machine written in C++ that served as a playground for a later GPGPU 
+implementation I did for [GPUMLib](https://gpumlib.sourceforge.net/) using Nvidia's CUDA. The main features of this 
+implementation is the support for multi-threaded training/classification using OpenMP and the support for five types of kernel functions:
 
 * linear
 * polynomial
