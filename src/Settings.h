@@ -2,7 +2,8 @@
  * Settings.h
  *
  *  Created on: Jan 5, 2012
- *      Author: CK / João Carlos Ferreira Gonçalves
+ *  Author      : Joao Carlos jcfgonc@gmail.com
+ *  License     : MIT License
  */
 
 #ifndef SETTINGS_H_

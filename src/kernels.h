@@ -2,7 +2,8 @@
  * kernels.h
  *
  *  Created on: Oct 28, 2011
- *      Author: ck
+ *  Author      : Joao Carlos jcfgonc@gmail.com
+ *  License     : MIT License
  */
 
 #ifndef KERNELS_H_

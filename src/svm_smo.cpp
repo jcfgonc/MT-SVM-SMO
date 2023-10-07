@@ -1,6 +1,7 @@
 //============================================================================
 // Name        : svm_smo.cpp
 // Author      : Joao Carlos jcfgonc@gmail.com
+// License     : MIT License
 //============================================================================
 
 typedef unsigned int uint;

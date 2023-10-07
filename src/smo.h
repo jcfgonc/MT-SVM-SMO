@@ -2,7 +2,8 @@
  * smo.h
  *
  *  Created on: Oct 26, 2011
- *      Author: ck
+ *  Author      : Joao Carlos jcfgonc@gmail.com
+ *  License     : MIT License
  */
 
 #ifndef SMO_H_

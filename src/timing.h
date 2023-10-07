@@ -2,7 +2,8 @@
  * timing
  *
  *  Created on: Oct 25, 2011
- *      Author: ck
+ *  Author      : Joao Carlos jcfgonc@gmail.com
+ *  License     : MIT License
  */
 
 #ifndef TIMING_H_

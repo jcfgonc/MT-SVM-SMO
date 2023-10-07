@@ -2,7 +2,8 @@
  * A matrix composed of consecutive (in memory) elements.
  *
  *  Created on: Oct 25, 2011
- *      Author: ck
+ *  Author      : Joao Carlos jcfgonc@gmail.com
+ *  License     : MIT License
  */
 
 #ifndef MATRIXF_H_

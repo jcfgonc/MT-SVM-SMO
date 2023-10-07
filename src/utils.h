@@ -2,7 +2,8 @@
  * utils.h
  *
  *  Created on: Oct 26, 2011
- *      Author: jcfgonc@gmail.com
+ *  Author      : Joao Carlos jcfgonc@gmail.com
+ *  License     : MIT License
  */
 
 #ifndef UTILS_H_
