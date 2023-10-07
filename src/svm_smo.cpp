@@ -92,7 +92,8 @@ int main(int argc, char **argv) {
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
 
-//	cout << "CK's multi-threaded CPU SVM/SMO" << endl;
+	cout << "Multi-Threaded SVM using the SMO algorithm" << endl;
+	cout << "(C) 2012 Joao Goncalves: jcfgonc@gmail.com" << endl;
 
 	char * training_filename = NULL;
 	char * testing_filename = NULL;
