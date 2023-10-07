@@ -1,0 +1,4 @@
+paper/* linguist-documentation
+datasets/* linguist-vendored
+*.cmd linguist-detectable=false
+*.csv linguist-detectable=false

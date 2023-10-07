@@ -1,0 +1,579 @@
+% This is LLNCS.DEM the demonstration file of
+% the LaTeX macro package from Springer-Verlag
+% for Lecture Notes in Computer Science,
+% version 2.4 for LaTeX2e as of 16. April 2010
+%
+\documentclass{llncs}
+\usepackage[portuguese,english]{babel}
+\usepackage[latin1]{inputenc}
+\usepackage{url}
+%\usepackage{tikz}
+%\usetikzlibrary{shadows}
+%\usetikzlibrary{shapes}
+\usepackage{gnuplot-lua-tikz}
+\usepackage{graphicx,latexsym} 
+\usepackage{amssymb,amsmath}
+\usepackage{longtable} 
+
+\usepackage{acronym}
+\newcommand{\listofacronymsname}{Acronyms}{}
+
+%\usepackage{pxfonts}
+%$\usepackage{url}
+%\usepackage{natbib}
+%\usepackage{listings}
+%\usepackage{epigraph}
+%\usepackage{lscape}
+%\usepackage{subfigure}
+%\usepackage{bibentry}
+%\usepackage{subtable}
+
+\usetikzlibrary{fit}					% fitting shapes to coordinates
+\usetikzlibrary{backgrounds}	% drawing the background after the foreground
+\usetikzlibrary{positioning}
+
+\usepackage{multirow}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+%\usepackage{times}
+
+\input{newcommand1}
+
+
+\newcommand{\tikzvar}[2]{%
+	\newlength{#1}
+	\setlength{#1}{#2}
+}
+
+%
+\urldef{\mailsa}\path|noel@ipg.pt|
+\urldef{\mailsb}\path|bribeiro@dei.uc.pt|
+\urldef{\mailsc}\path|jcgonc@student.dei.uc.pt|
+
+%
+\begin{document}
+%
+\title{Multi-Threaded Support Vector Machines For Pattern Recognition}
+%
+
+
+% abbreviated title (for running head) also used for the TOC unless \toctitle is used
+\titlerunning{Multi-Threaded SVM for Pattern Recognition}
+
+
+
+% the name(s) of the author(s) follow(s) next
+\author{Jo\~ao Gon\c{c}alves$^{1}$ \and Noel Lopes$^{1,2}$ \and Bernardete Ribeiro$^{1}$}
+%
+\authorrunning{Gon\c{c}alves and Lopes and Ribeiro}   % abbreviated author list (for running head)
+%
+\institute{$^{1}$CISUC, Department of Informatics Engineering, University of Coimbra, Portugal \\ % \url{http://www.cisuc.uc.pt/}
+%\and
+$^{2}$UDI/IPG - Research Unit, Polytechnic Institute of Guarda, Portugal \\  
+\mailsc, \mailsa, \mailsb
+}
+\maketitle              % typeset the title of the contribution
+
+\input{acronyms}
+
+%==============
+\begin{abstract}
+%==============
+Support Vector Machines (SVM) have become indispensable tools in the area of pattern recognition. They show powerful classification and regression performance in highly non-linear problems by mapping the input vectors
+nonlinearly into a high-dimensional feature space through a kernel function. However, the optimization task is numerically expensive since single-threaded implementations are hardly able to
+cope up with the complex learning task. In  this paper, we present a multi-threaded implementation of the Sequential Minimal Optimization (SMO) which reduces the numerical complexity by parallelizing the KKT conditions update, the calculation of the hyperplane offset and the classification task.
+Our preliminary results both in benchmark datasets and  real-world  problems show competitive performance to the state-of-the-art tools while the execution running times are considerably faster. 
+\keywords{SVM, OpenMP, sequential minimal optimization (SMO)}
+\end{abstract}
+%==============
+\section{Introduction}
+%=======
+The increasing complexity and performance demands in pattern recognition applications require innovative and fast approaches to cope with the system non-linearities.  In particular, the design  of efficient and scalable systems depends on powerful tools  to extract relevant (and meaningful) information.   Additionally, the learning algorithms often require high-processing capabilities  making current single-threaded algorithms  unable to scale with the demanding processing power needed. Among the supervised learning algorithms, \acp{SVM} are the most widely used algorithm due to their generalization properties and regularization capability. \acp{SVM} are binary large margin classifiers which have found successful applications in many scientific fields such as %engineering and 
+bio-informatics~\cite{ZieRaeMikSchLenMue00}, information management~\cite{Ando2005}, finance and business~\cite{Wu2010}. % among many others.
+The \ac{SVM} aims to find the optimal decision hyperplane which is equivalent  to reach the best trade-off between generalization and empirical errors. %This method shows powerful classification and regression performance in complex nonlinear problems by using the Mercer kernel function which transforms the input vectors into a highly-dimensional space and by learning a linear  model in this feature space.  
+An important and crucial point in the \ac{SVM} formulation is that it can provide a good generalization independent of the training set distribution by making use of the principle of structural risk minimization~\cite{Vapnik1995,CorVap95}.
+However, they usually require significant memory and computational burden for calculating the large Gram matrix~\cite{Chen2012}. To circumvent this limitation fast learning methods have successfully been proposed~\cite{Suykens2010,Suykens2005}. However, most implementations do no take advantage the multi-core architecture of today CPU baseline computers.
+In this paper we focus on a multi-threaded parallel CPU standalone SVM version (MT-SVM)  which builds up from the scratch an implementation of the Sequential Minimal Optimization (SMO) algorithm.  
+Although previous approaches have been developed~\cite{Catanzaro2008}, our implementation includes a new kernel function, the Universal Kernel Function (UKF)~\cite{Rui2011} which leads to a broad spectrum of the generalization capabilities of the learning machine. Experiments performed on UCI datasets benchmarks~\cite{Asuncion2010} and real world problems such as MP3 Steganalysis~\cite{Qiao2009} and the Peptidases detection~\cite{cit:Lopes2012} yield performance competitive results as compared to state-of-the-art LIBSVM tools while delivering  better speedups on large datasets. %In the grounds of a real world MP3 steganalysis high-dimensional problem which aims at discovering hidden audio messages the algorithm runs fast and the speedups obtained are excellent.  %(\cite{cit:Ferrer2005} )
+
+The paper is organized as follows: Section~\ref{sec:svm} describes the \ac{SVM} training and classification tasks. Section~\ref{sec:svm_smo} addresses the \ac{SMO} algorithm. Section~\ref{sec:svm_psmo} describes the parallel implementation of both the training and classification tasks. We present our results in section~\ref{sec:exp_results}. The conclusions as well as future work are addressed in section~\ref{sec:conclusions}.
+%==============
+\section{Support Vector Machines (SVM)}
+%==============
+\label{sec:svm}
+%\subsection{Preliminarities}
+\label{sec:svm_formulation}
+Given a set of $n$ training points in a $d$ dimensional feature space $\x \in \bbbr^d$ each associated with a label $y_i \in \{-1, 1\}$ the binary soft-margin kernel \ac{SVM} solves the linearly convex quadratic problem:
+%-------
+%\begin{alignat}{2}
+%	\label{eq:svm_min_w}
+%	\text{minimize}   & \qquad	\frac{1}{2}\Arrowvert \textbf{w} \Arrowvert ^2 + C \sum\limits_{i=1}^{n}\xi_i &&\qquad	\\ 
+%	\label{eq:svm_constraints}
+%	\text{subject to} & \qquad \xi \geq 0 &&\qquad \\
+%	& \qquad	y_i(\textbf{w}\cdot\textbf{x}_i+b)\geq 1 - \xi_i, &\qquad	& i=1,2,\dots n
+%\end{alignat}
+%%-------
+%Which has the following dual:
+%-------
+\begin{align}
+	\label{eq:svm_kernel_dual1} \text{maximize} \quad & \sum\limits_{i=1}^{n} \alpha_i - \frac{1}{2} \sum\limits_{i=1}^{n} \sum\limits_{j=1}^{n} \alpha_i\alpha_j y_i y_j K(\x_i,\x_j) \\
+	\label{eq:svm_kernel_dual2} \text{subject to} \quad & \sum\limits_{i=1}^{n} \alpha_i y_i = 0 \;\; \text{ and } \;\; 0 \leq \alpha_i \leq C, \;\; i=1,2,\dots n
+\end{align}
+%-------
+For each training point $\x_i$ there is an associated Lagrange multiplier $\alpha_i$, bounded between 0 and the penalization constant $C$. The careful selection of this constant allows the \ac{SVM} to balance the generalization  and empirical error. %on the training set. 
+%This is equivalent to control the size of the gap between both training classes. 
+The data points with $\alpha_i > 0$ are the \acp{SV} and define the decision boundary. Considering that $n_{SV}$ is the number of SVs, after convergence the offset $b$ is calculated as a weighted arithmetic average as follows:
+\begin{align}
+%b=\frac{b_{low}+b_{high}}{2}
+b=\frac{1}{n_{SV}}\sum\limits_{j=1}^{n_{SV}} \left( \sum\limits_{i=1}^{n} \alpha_i y_i K(\x_i,\x_j) \right) -y_j
+\label{fig:svm_b_calculus}
+\end{align}
+To improve performance on non-linearly separable classes, the above optimization task (see (\ref{eq:svm_kernel_dual1})) makes use of the kernel trick which allows the \ac{SVM} to work on a higher dimension feature space by means of a dot-product between two vectors $\x_i$ and $\x_j$. This result is calculated using the kernel projection $K(\x_i,\x_j)$. Therefore with a non-linear kernel the margin corresponds to a linear boundary in this new feature space.
+The standard kernel functions (linear, polynomial, Gaussian and sigmoid) have been considered as well as a recent kernel function, Universal Kernel Function (UKF) which has been proved to satisfy Mercer kernel~\cite{Rui2011} conditions. In the sequel is described as follows:
+\begin{equation}
+K(\u,\v) = \displaystyle L (\|\u - \v \|^2 + \sigma^2)\displaystyle^{\displaystyle-\alpha}
+\end{equation}
+where $L$ is a normalization constant, $\sigma > 0$ is the kernel width and $\alpha > 0$ controls the decreasing speed around zero. This kernel aims to gather points near to each other, in a higher dimension space, since they are strongly correlated. Hence, it can provide a small number of SVs and thus speeds up both the training and classification tasks. Additionally, it can yield better generalization~\cite{Ayat02kmod}.
+%isto sao quotes:
+%firstly, it is not necessary to make a selection out of the above mentioned kernel functions, which can simplify the modeling process and, consequently, will save a lot of computing time; secondly, it has a stronger mapping ability and can properly deal with a large variety of mapping problems due to its flexibility to vary.
+%the UKF kernel can lead to improve classification accuracy. This strongly suggests that application of the UKF kernel can improve the generalization performance of SVM greatly.
+Finally, the classification of a given sample $\z$ is done using a subset of the training set upholding the support vectors. The \ac{SVM} classification task is:
+\begin{equation} \label{eq:svm_kernel_classfc}
+y(\z)=\text{sign} \left( b + \sum\limits_{i=1}^{n_{SV}}\alpha_i y_i K(\x_i,\z)\right)
+\end{equation}
+%==============
+\section{Sequential Minimal Optimization (SMO) Algorithm }
+%==============
+\label{sec:svm_smo}
+%se calhar e melhor remover isto?
+%Previous computational methods to solve the training problem are slow because they are based on Numerical Optimization libraries, in the form of third-party QP solvers. Additionally, they require high amounts of memory to solve the task at hand. There are better alternatives like by working in chunks of training samples~\cite{Vapnik1995} or by decomposing the problem into a series of smaller QP sub-problems~\cite{Osuna1997,Platt1998}.
+ The Sequential Minimal Optimization (SMO) algorithm was developed by Platt in 1998~\cite{Platt1998}.
+%This algorithm is based on Osuna's decomposition scheme and solves the smallest possible optimization task at each step, updating two $\alpha$ variables.
+At each step, only two Lagrange multipliers, $\alpha_i$ and $\alpha_j$ are required to be solved. Both multipliers must satisfy the constraints defined in (\ref{eq:svm_kernel_dual2})~\cite{Platt1998,Catanzaro2008}.
+Algorithm~\ref{algo:smo} details the main steps of the soft-margin \ac{SMO} algorithm using the kernel trick~\cite{Catanzaro2008,L.J.Cao2006}.
+%-------
+\begin{algorithm}[t]
+\caption{Sequential Minimal Optimization (SMO) algorithm}
+\label{algo:smo}
+\algsetup{indent=5em}
+\begin{algorithmic}[1]
+\REQUIRE $\x_i\in\chi$, $y_i\in\Omega$, $i\in\{1\cdots n\}$
+\STATE Initialize: $\alpha_i$=0, $f_i$=$-y_i$, $\forall i \in\{1\cdots n\}$
+\STATE Initialize: $ b_{high} = -1 $, $ b_{low} = 1 $, $ i_{high} = \text{min}\{i:y_i=1\} $, $ i_{low} = \text{min}\{i:y_i=-1\}$, \\ $\forall i \in\{1\cdots n\}$
+\STATE Update: $\alpha_{i{low}}$, $\alpha_{i_{high}}$
+\REPEAT
+	\STATE Update optimality conditions $f_i$ (see (\ref{eq:fi}))	
+	\STATE Compute: $b_{high}$, $b_{low}$, $i_{high}$, $i_{low}$
+	\STATE Update $\alpha_{i_{low}}$, $\alpha_{i_{high}}$, $\forall i \in\{1\cdots n\}$
+\UNTIL{$b_{low}\leq b_{high} + 2\tau$}
+\end{algorithmic}
+\end{algorithm}
+%-------
+Initially the $\alpha_i$ are set to $0$ as they satisfy the constraints defined in (\ref{eq:svm_kernel_dual2}). At each step, after choosing $i_{high}$ and $i_{low}$, the new values for the two Lagrange multipliers $\alpha_i^{\text{new}}$ are computed as follows:
+%-------
+\begin{align}
+\alpha_{i_{low}}^\text{new} & = \alpha_{i_{low}} + y_{i_{low}} \frac{b_{high}-b_{low}}{\eta} \\
+\alpha_{i_{high}}^\text{new} & = \alpha_{i_{high}} + y_{i_{low}}y_{i_{high}} (\alpha_{i_{low}}-\alpha_{i_{low}}^\text{new})
+\end{align}
+%-------
+where $\eta$ is defined as:
+%-------
+\begin{equation}
+\eta = K(x_{i_{high}},x_{i_{high}})+K(x_{i_{low}},x_{i_{low}})-2\cdot K(x_{i_{high}},x_{i_{low}})
+\end{equation}
+%-------
+%As described by Platt, $\eta$ can be non positive if a given kernel $K$ does not obey Mercer's conditions. Because this work does not have this kind of kernels, this condition is not handled. %ref do artigo do PLATT
+Naturally, $\alpha_{i_{low}}$ and $\alpha_{i_{high}}$ must satisfy (\ref{eq:svm_kernel_dual2}). Thus, if $\alpha_{i_{low}}$ changes by $\delta$ then $\alpha_{i_{high}}$ changes by the same amount on the opposite direction ($- \delta$). Next, the \ac{KKT} conditions must be updated for each sample $\x_i$:
+%-------
+%\begin{equation}
+%f_i=\w(\alpha)\cdot \z_i-y_i = \sum\limits_{j=1}^{d}\alpha_i y_i K(\x_i,\x_j)-y_i
+%f_i= \sum\limits_{j=1}^{n}\alpha_i y_i K(\x_i,\x_j)-y_i
+%\end{equation}
+%-------
+%which can be simplified to:
+%-------
+\begin{equation}\label{eq:fi}
+f_i=f_i^{old}+(\alpha_{i_{high}}^{new}-\alpha_{i_{high}})y_{i_{high}}K(x_{i_{high}},x_i) + (\alpha_{i_{low}}^{new}-\alpha_{i_{low}})y_{i_{low}}K(x_{i_{low}},x_i)
+\end{equation}
+%-------
+The indices of the next Lagrange multipliers $ i_{low} $ and $ i_{high} $ are chosen from two corresponding sets:
+\begin{align}
+I_{low} &= \{i:0<\alpha_i<C\} \cup \{i:y_i>0 , \alpha_i=C\} \cup \{i:y_i<0 , \alpha_i=0\} \\
+I_{high} &= \{i:0<\alpha_i<C\} \cup \{i:y_i>0 , \alpha_i=0\} \cup \{i:y_i<0 , \alpha_i=C\}
+\end{align}
+The optimality coefficients $b_{low}$ and $b_{high}$ are calculated as:
+\begin{align}
+b_{low}=\text{max}\{f_i:i\in I_{low}\} \\
+b_{high}=\text{min}\{f_i:i\in I_{high}\}
+\end{align}
+For simplicity, to choose $i_{low}$ and $i_{high}$ we use the first order heuristic~\cite{Keerthi2001}. For the next iteration, these indices are calculated as:
+\begin{align}
+i_{low}&=\text{arg max}\{f_i:i\in I_{low}\} \\
+i_{high}&=\text{arg min}\{f_i:i\in I_{high}\}
+\end{align}
+The algorithm is executed until the following inequality holds:
+\begin{align}
+b_{low}\leq b_{high} + 2\tau \Leftrightarrow b_{low} - b_{high} \leq 2\tau
+\end{align}
+where $\tau : 0<\tau<1$ is the tolerance of the solution optimality and in fact the stopping criteria. After converging, the parameter $b$ can be calculated %: either as an arithmetic mean between $b_{low}$ and $b_{high}$ or as a weighted average using the SVs. The latter corresponds to  (\ref{fig:svm_b_calculus}) and is more accurate. %, therefore it will be used here.
+using (\ref{fig:svm_b_calculus}).
+%==============
+\section{Parallel SMO implementation}
+%==============
+\label{sec:svm_psmo}
+Our implementation was developed in C++ using OpenMP. This \acs{API} allows to write multi-threaded shared memory (also named \ac{UMA}) applications in either C/C++ or Fortran. Programs written using this approach are in the Flynn's taxonomy classified as \ac{SPMD} because the same program is executed by different threads, each processing a different subset of the data.
+%se calhar e melhor cortar-se isto
+%The OpenMP library uses the fork-join model of parallel execution where programs begin as a single process: the  master thread.  The master thread executes sequentially until the first parallel region construct is encountered. Shortly, the execution is split by multiple threads and in the end of the region the master threads waits for the arrival of the other threads.
+
+Our approach consists of identifying the SMO steps that are simultaneously responsible for large portions of the overall computation and that could be safely parallelized.
+%Even though the SMO algorithm in its essence is sequential our emphasis is that there are steps which can be safely parallelized. In fact, these steps match the areas where most of the computation is done and, therefore, where the algorithm  consumes more time~\cite{L.J.Cao2006,Catanzaro2008}. O
+One of such steps, as noted by Cao et al.~\cite{L.J.Cao2006}, is the \ac{KKT} conditions update (using $f_i$ and the kernel Gram matrix). Since each $f_i$ can be computed independently, this step can fully take advantage of CPU multi-core architectures.
+Another phase which can be accelerated is the computation of the next $b_{low}$, $b_{high}$, $\alpha_{low}$ and $\alpha_{high}$. Since this is done by performing a first order heuristic search, it can be executed in parallel using reduction operations. Each thread works on a subset of both $I_{high}$ and $I_{low}$ while the master thread waits for the results and then applies the reduction operators. The offset $b$ is also computed in parallel for each SV. Thus, the only sequential steps are the Lagrange multipliers ($\alpha_{i{low}}$ and $\alpha_{i_{high}}$) update and the convergence verification. % (step 8 on algorithm \ref{algo:smo}).
+
+%esta palavra 'in' diz que esta mal, mas nao percebo
+The above parallel tasks are divided into equal parts, each one assigned to a corresponding thread. In theory, if the original single-threaded \ac{SMO} training process takes $T_s$ time, using a processor with $P$ cores, the multi-threaded \ac{SMO} would execute in $T_p = \frac{T_s}{P}$ and would offer a speedup of $P \times$. However, this theoretical speedup is rarely achieved in practice because part of the code is not parallelized. Even though the algorithm can be fully parallel, the sequential sections always exist (Amdahl's law) due to: (i) synchronization, where some threads must wait for the completion of others, (ii) memory bandwidth, which is shared by all CPU cores, and (iii) mutual exclusion areas, among other reasons.
+%==============
+\section{Experimental Setup, Results and Discussion}
+%==============
+\label{sec:exp_results}
+In order to evaluate our MT-SVM implementation w.r.t. the performance and speedup we compared the results obtained for several benchmarks with the corresponding results of the state-of-the-art LIBSVM (version 3.11)~\cite{Chang2011}. Both tools use the SMO algorithm. For fairness we set LIBSVM cache to one Megabyte since currently our implementation does not make use of a kernel cache. For our implementation we set the number of threads to $4$. The system used for testing has an Intel Quad Core i5-750 processor with the clock set to 3.33 GHz. Moreover, the machine used had 12 GB RAM.
+
+Currently our implementation is designed exclusively for binary tasks, thus we have specifically chosen binary class datasets for the experimental setup. With the exception of the Two-Spiral, the  MP3 Steganalysis~\cite{Qiao2009} and the Peptidases detection~\cite{cit:Lopes2012}, the remainder datasets where obtained from the UCI Machine Learning repository \cite{Asuncion2010}. The Two-Spiral dataset consists of learning to discriminate between data distributed on two distinct spirals that coil around each other in the x-y plane. This dataset was used in order to assess the \ac{UKF} kernel efficiency. %We tested the \ac{UKF} kernel against  the \ac{RBF} kernel, with the following settings: $L = 2.0$, $\sigma = 0.6$ and $\alpha = 14.0$. 
+The MP3 Steganalysis dataset was extracted from a real problem using the four methods described in Qiao et al.\ \cite{Qiao2009}. The dataset is composed of two classes: the first corresponds to normal MP3 audio files (cover) and the second are the same MP3 files with hidden information (stego). %
+The Peptidases detection problem is described in Lopes et al.~\cite{cit:Lopes2012}. Peptidases are a class of enzymes that catalyze chemical reactions, allowing the decomposition of protein substances into smaller molecules. The task consists of discriminating between peptidases and non-peptidases.
+Table~\ref{table:datasets} lists the main characteristics of the datasets as well as the best RBF kernel parameters determined by grid search. The optimality gap $\tau$ was set to $0.01$.
+%----
+\begin{table} 
+	\caption{Datasets and RBF kernel parameters used in the experiments.}
+	\label{table:datasets}
+	{ \scriptsize
+	\begin{center}
+		\begin{tabular}{ | c | c | c | c | c | }
+		\hline
+		Dataset & \#Samples & \#Features & $C$ & $\gamma$ \\ \hline
+		\hline
+		Adult            &   32561 &	14 &	1.0   &	0.100 \\ 
+		Breast Cancer    &	   569 &	30 &	3.0   &	0.050 \\ 
+		German           &    1000 &	59 &	1.0   &	0.050 \\ 
+		Haberman         &     306 &	3  &	1.0   &	1.000 \\ 
+		Heart            &	   270 &	20 &	0.1   & 0.050 \\ 
+		Ionosphere       &     351 &	34 &	1.0   &	0.500 \\ 
+		Sonar            &     208 &	30 &	3.0   & 0.050 \\ 
+		Tic-tac-toe      &     958 &	 9 &	1.0   &	0.001 \\ 
+		Two-Spiral       & 2097152 &   2 &	3.0   &	0.250 \\ 
+		MP3 Steganalysis &    1994 & 742 &	0.1   &	0.250 \\ 
+		Peptidases       &   20778 &	24 &	0.56  & 11.30 \\ \hline		
+		\end{tabular}
+	\end{center}
+	}
+\end{table}
+%-------
+The datasets were normalized before being processed using a standard score procedure. We ran the experiments $10$ times for each dataset with 5-fold cross validation. %Consequently, each classifier was run $50$ times. %Input/Output (I/O) times were excluded. (Não pode ser porque não podemos excluir o IO da libsvm)
+Table~\ref{tab:speedups} shows the speedups obtained by MT-SVM as compared to LIBSVM, both for training and classification tasks. For the smaller datasets (Breast Cancer, Haberman, Heart, Ionosphere, Sonar and Tic-tac-toe) the speedup is actually negative ($< 1$). In this case, the amount of data simply does not justify the overhead of launching additional threads and synchronizing their execution. However, for bigger datasets, with a sufficient large number of samples and/or features (Adult, German, Two-Spiral, MP3 Steganalysis and Peptidases detection), the MT-SVM implementation can boost significantly both the training and the classification tasks. This takes particular relevance for the training task as it can considerably reduce  the time required to perform a grid search (a fundamental process to obtain good generalization models). 
+ %the higher speedups obtained by MT-SVM as compared to LIBSVM which cover the range ($1.8 - 7.24$)$\times$. This is clearly evidenced by the maximum speedup of $7.24\times$ of  our method over LIBSVM obtained in the spiral data set. This might be in partly due to the large number of iterations  performed by LIBSVM. For the three datasets LIBSVM's heuristics are effective in accelerating the training convergence. Using the adult dataset the speedup obtained by our version against LIBSVM ($2.04\times$) is similar to the one obtained by~\cite{L.J.Cao2006} using four processors ($2.17\times$).
+%
+%--------------
+\begin{table}[t]
+	\caption{Training and classification times (in seconds) and speedups obtained for the MT-SVM implementations as compared to LIBSVM\@.}
+	\label{tab:speedups}
+	\begin{center} \scalebox{0.98}
+	{ \scriptsize
+	\begin{tabular}{|l|c|c|c|c|c|c|} \hline
+	& MT-SVM & LIBSVM & MT-SVM & LIBSVM & \multicolumn{1}{|c|}{Training} & \multicolumn{1}{|c|}{Classification} \\ \cline{2-7}
+	Dataset & \multicolumn{2}{|c|}{Training} & \multicolumn{2}{|c|}{Classification} & \multicolumn{2}{|c|}{MT-SVM Speedup} \\
+	\hline
+	\hline
+	adult &
+		17.733$\pm$0.063 &
+		32.492$\pm$0.071 &
+		1.033$\pm$0.717 &
+		2.240$\pm$0.586 &
+		\textbf{1.83}$\times$ &
+		\textbf{2.17}$\times$ \\
+	Breast Cancer &
+		0.028$\pm$0.001 &
+		0.004$\pm$0.003 &
+		0.008$\pm$0.001 &
+		0.008$\pm$0.003 &
+		0.14$\times$ &
+		\textbf{1.10}$\times$ \\
+	German &
+		0.088$\pm$0.002 &
+		0.126$\pm$0.001 &
+		0.009$\pm$0.005 &
+		0.024$\pm$0.004 &
+		\textbf{1.42}$\times$ &
+		\textbf{2.61}$\times$ \\	
+	Haberman &
+		0.028$\pm$0.001 &
+		0.004$\pm$0.000 &
+		0.006$\pm$0.002 &
+		0.001$\pm$0.004 &
+		0.15$\times$ &
+		0.14$\times$ \\	
+	Heart &
+		0.012$\pm$0.002 &
+		0.005$\pm$0.001 &
+		0.007$\pm$0.002 &
+		0.002$\pm$0.003 &
+		0.44$\times$ &
+		0.23$\times$ \\	
+	Ionosphere &
+		0.029$\pm$0.002 &
+		0.009$\pm$0.001 &
+		0.007$\pm$0.001 &
+		0.003$\pm$0.003 &
+		0.32$\times$ &
+		0.41$\times$ \\	
+	Sonar &
+		0.021$\pm$0.001 &
+		0.007$\pm$0.001 &
+		0.007$\pm$0.004 &
+		0.003$\pm$0.003 &
+		0.32$\times$ &
+		0.38$\times$ \\	
+	Tic-tac-toe &
+		0.147$\pm$0.001 &
+		0.079$\pm$0.001 &
+		0.007$\pm$0.008 &
+		0.006$\pm$0.010 &
+		0.53$\times$ &
+		0.78$\times$ \\	
+	Two-Spiral &
+		21.259$\pm$0.116 &
+		146.723$\pm$0.664 &
+		3.018$\pm$13.569 &
+		11.720$\pm$2.025 &
+		\textbf{6.90}$\times$ &
+		\textbf{3.88}$\times$ \\	
+	MP3 Steganalysis &
+		0.344$\pm$0.003 &
+		2.367$\pm$0.016 &
+		0.019$\pm$0.053 &
+		0.573$\pm$0.017 &
+		\textbf{6.87}$\times$ &
+		\textbf{29.53}$\times$ \\	
+	Peptidases &
+		3.973$\pm$0.033 &
+		12.079$\pm$0.008 &
+		0.418$\pm$0.124 &
+		1.690$\pm$0.204 &
+		\textbf{3.04}$\times$ &
+		\textbf{4.04}$\times$ \\	
+	\hline
+	\end{tabular}
+	} \end{center}
+\end{table}
+%--------------
+As illustrated in Table \ref{tab:results_classification_acc_fscore}, MT-SVM yields competitive performance as compared to LIBSVM\@. In terms of classification (accuracy and F-Score), the Wilcoxon signed ranked test found no statistical evidence of any of the implementations performing worse than the other. However, the null hypothesis that MT-SVM generates a model with a number of SVs greater or equal than the number generated by LIBSVM is rejected at 0.05 significance level.
+%--------------
+\begin{table}[t]
+	\caption{MT-SVM and LIBSVM classification performance and number of SVs.}
+	\label{tab:results_classification_acc_fscore}
+	\begin{center} \scalebox{0.98}
+	{ \scriptsize
+	\begin{tabular}{|l|c|c|c|c|r|r|} \hline
+	& MT-SVM & LIBSVM & MT-SVM & LIBSVM & \multicolumn{1}{|c|}{MT-SVM} & \multicolumn{1}{|c|}{LIBSVM} \\ \cline{2-7}
+	Dataset & \multicolumn{2}{|c|}{Accuracy (\%)} & \multicolumn{2}{|c|}{F-Score (\%)} & \multicolumn{2}{|c|}{\#SVs} \\
+	\hline
+	\hline
+	Adult & 
+		84.65$\pm$0.39 &
+		\textbf{84.72$\pm$0.38} &
+		90.13$\pm$0.28 &
+		\textbf{90.38$\pm$0.24} &
+		\textbf{9781.8$\pm$56.4} &
+		9788.4$\pm$48.9
+		\\
+	Breast Cancer &
+		97.48$\pm$2.26 &
+		\textbf{97.76$\pm$1.49} &
+		96.59$\pm$1.90 &
+		\textbf{96.96$\pm$2.02} &
+		\textbf{113.3$\pm$05.2} &
+		114.4$\pm$04.9
+		\\
+	German &
+		\textbf{73.61$\pm$1.65} &
+		73.03$\pm$1.32 &
+		83.44$\pm$1.08 &
+		\textbf{83.46$\pm$0.82} &
+		\textbf{713.7$\pm$05.5} &
+		718.7$\pm$05.1
+		\\
+	Haberman &
+		71.85$\pm$4.42 &
+		\textbf{72.92$\pm$3.50} &
+		82.14$\pm$3.13 &
+		\textbf{83.49$\pm$2.31} &
+		\textbf{149.1$\pm$04.8} &
+		151.2$\pm$04.4
+		\\
+	Heart &
+		\textbf{83.18$\pm$4.64} &
+		82.37$\pm$4.96 &
+		\textbf{85.44$\pm$4.09} &
+		85.30$\pm$4.00 &
+		\textbf{175.7$\pm$03.1} &
+		177.2$\pm$03.1
+		\\
+	Ionosphere &
+		\textbf{89.66$\pm$3.38} &
+		89.06$\pm$3.58 &
+		\textbf{91.16$\pm$3.13} &
+		90.72$\pm$3.29 &
+		\textbf{215.1$\pm$03.1} &
+		217.7$\pm$03.2
+		\\
+	Sonar &
+		\textbf{85.77$\pm$4.90} &
+		84.65$\pm$4.78 &
+		\textbf{87.30$\pm$4.39} &
+		86.83$\pm$4.00 &
+		\textbf{151.1$\pm$02.6} &
+		153.7$\pm$02.4
+		\\
+	Tic-tac-toe &
+		97.70$\pm$1.22 &
+		\textbf{97.72$\pm$1.26} &
+		98.28$\pm$0.90 &
+		\textbf{98.29$\pm$0.93} &
+		\textbf{548.4$\pm$10.1} &
+		551.8$\pm$10.9
+		\\
+	Two-Spiral &
+		\textbf{100.00$\pm$0.0} &
+		\textbf{100.00$\pm$0.0} &
+		\textbf{100.00$\pm$0.0} &
+		\textbf{100.00$\pm$0.0} &
+		\textbf{939.9$\pm$58.2} &
+		1053.1$\pm$67.5
+		\\
+	MP3 Steganalysis &
+		\textbf{97.05$\pm$0.87} &
+		96.92$\pm$1.00 &
+		\textbf{97.06$\pm$0.88} &
+		96.94$\pm$0.99 &
+		\textbf{346.2$\pm$07.1} &
+		348.1$\pm$07.2
+		\\
+	Peptidases &
+		\textbf{96.25$\pm$0.24} &
+		96.04$\pm$0.23 &
+		\textbf{97.85$\pm$0.14} &
+		97.75$\pm$0.13 &
+		6849.4$\pm$23.7 &
+		\textbf{3829.6$\pm$17.3}
+		\\		
+	\hline
+	\end{tabular}
+	} \end{center}
+\end{table}
+%--------------
+Table~\ref{tab:ukf} presents the UKF results. The additional number of parameters greatly increases the complexity of performing a grid search. Having said that, it is possible that the results could be improved by narrowing the search. Nevertheless, the results show the usefulness of the UKF kernel. UKF yield better or equal F-Score results than the RBF kernel, in almost a half of the datasets. Using the Wilcoxon signed ranked test we found no statistical evidence of the UKF kernel performing worse than the RBF kernel and vice-versa. It is interesting to note that, with the exception of the Sonar dataset, UKF yields better F-Score results in the datasets that present a smaller number of SVs than the corresponding number for the RBF kernel. This seems to indicate that UKF presents better classification performance when it is able to gather points near to each other, in a higher dimension space, as intended.
+%--------------
+\begin{table}[t]
+	\caption{UKF kernel results with MT-SVM.}
+	\label{tab:ukf}
+	\begin{center} %\scalebox{0.96}
+	{ \scriptsize
+	\begin{tabular}{|l|r|r|r|r|r|} \hline
+	& \multicolumn{2}{|c|}{Time (seconds)} & \multicolumn{2}{|c|}{Classification} & \\ \cline{2-5}
+	Dataset & Training & Classification & Accuracy (\%) & F-Score (\%) & \#SVs \\
+	\hline
+	\hline
+	Adult & 
+		15.518$\pm$0.160 &
+		2.210$\pm$0.029 &
+		83.36$\pm$0.37 &
+		89.47$\pm$0.26 &
+		12543.6$\pm$56.6 \\
+	Breast Cancer &
+		0.026$\pm$0.010 &
+		0.001$\pm$0.000 &
+		\textbf{98.11$\pm$1.00} &
+		\textbf{97.39$\pm$1.46} &
+		\textbf{63.1$\pm$03.0} \\
+	German &
+		0.139$\pm$0.018 &
+		0.005$\pm$0.001 &
+		71.79$\pm$3.15 &
+		83.04$\pm$2.08 &
+		795.6$\pm$13.9 \\
+	Haberman &
+		0.027$\pm$0.008 &
+		0.001$\pm$0.000 &
+		72.45$\pm$4.91 &
+		82.85$\pm$3.58 &
+		231.1$\pm$04.0 \\
+	Heart &
+		0.014$\pm$0.001 &
+		0.001$\pm$0.000 &
+		82.93$\pm$3.59 &
+		84.85$\pm$3.41 &
+		181.5$\pm$05.5 \\
+	Ionosphere &
+		0.014$\pm$0.002 &
+		0.001$\pm$0.000 &
+		\textbf{94.28$\pm$3.04} &
+		\textbf{95.61$\pm$2.30} &
+		\textbf{101.4$\pm$04.0} \\
+	Sonar &
+		0.014$\pm$0.003 &
+		0.000$\pm$0.000 &
+		85.10$\pm$4.81 &
+		86.19$\pm$4.69 &
+		\textbf{129.8$\pm$03.8} \\
+	Tic-tac-toe &
+		0.208$\pm$0.021 &
+		0.002$\pm$0.001 &
+		98.17$\pm$0.94 &
+		\textbf{98.59$\pm$0.76} &
+		\textbf{475.6$\pm$11.0} \\
+	Two-Spiral &
+		13.210$\pm$0.004 & 2.940$\pm$0.010 & \textbf{100.00$\pm$0.00} & \textbf{100.00$\pm$0.00} & 
+		\textbf{324.0$\pm$05.0} \\
+	MP3 Steganalysis &
+		0.915$\pm$0.045 &
+		0.052$\pm$0.007 &
+		93.02$\pm$0.78 &
+		93.12$\pm$0.83 &
+		1019.4$\pm$08.5 \\
+	Peptidases &
+		7.803$\pm$0.827 &
+		0.638$\pm$0.056 &
+		96.73$\pm$0.25 &
+		\textbf{98.14$\pm$0.14} &
+		5097.6$\pm$57.5 \\
+	\hline
+	\end{tabular}
+	} \end{center}
+\end{table}
+%=================================================
+\section{Conclusions and Future Work}
+%=================================================
+\label{sec:conclusions}
+As the amount of data produced grows at an unprecedented rate fast machine learning algorithms that are able to extract relevant information from large repositories have become extremely important. To partly answer to this challenge 
+in this paper we proposed a multi-threaded parallel MT-SVM which parallelizes the SMO algorithm. Our implementation uses the power available on multi-core \acp{CPU} and efficiently learns (and classifies) within several domains, exposing good properties in scaling data. Speedups up to $7\times$ on training and up to $30\times$ on classification tasks were achieved.
+Additionally, the \ac{UKF} kernel which has good generalization properties in the high-dimensional feature space has been included, although more parameters are needed to fine tune the results. In future work we will account for vectorization (SSE or AVX) as well as support for kernel caching which may drastically decrease the amount of computation. %To cope with the increasingly computational performance demands, the challenge consists of building multi-core implementations of machine learning algorithms.
+%When comparing the times taken with our single-threaded implementation against LIBSVM its clear their classifier is faster and also extremely optimized. But when using our version with more than two threads both the training and classifications tasks are faster. This  on computers with multi-core \acp{CPU}.
+%A first step was presented in this paper with a multi-thread implementation of \ac{SVM}. The algorithm was tested on UCI benchmark datasets yield promising results as compared with well-established software in the domain of machine learning and pattern recognition. 
+
+
+
+%=================================================
+% Bibliography
+%=================================================
+
+\bibliographystyle{splncs03}
+\bibliography{SVM_GPU_iconip1}
+
+\end{document}
+
+% VER:
+% Abstract:
+% - VER: non-linear | nonlinearly
+% - ALTERADO: "a few benchmark datasets" por "several benchmark datasets"
+% - ALTERADO: "in a steganalysis problem" por "in a real-world steganalysis problem"
+% Introdução:
+% - JUNTEI: eq. 2 e 3
